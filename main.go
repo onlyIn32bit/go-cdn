@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"log"
@@ -14,21 +15,21 @@ import (
 	"github.com/joho/godotenv"
 )
 
+var port = flag.Int("port", 8090, "Port to run the server on")
+var uploadDir = flag.String("upload-dir", "./uploads", "Directory to save uploaded files")
+
 func main() {
+	flag.Parse()
+
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
 	const maxFileSize = 20 * 1024 * 1024 // 20MB
-	uploadDir := os.Getenv("UPLOAD_DIR")
 	apiKey := os.Getenv("API_KEY")
 	domain := os.Getenv("DOMAIN")
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8090"
-	}
-	fmt.Print(uploadDir)
+	fmt.Print(*uploadDir)
 
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(*uploadDir, os.ModePerm); err != nil {
 		log.Fatal("Cannot create uploads directory: ", err)
 	}
 	app := fiber.New()
@@ -64,7 +65,7 @@ func main() {
 			fileName = uuid.New().String()
 		}
 		finalFileName := fmt.Sprintf("%s%s", fileName, ".jpeg")
-		filePath := filepath.Join(uploadDir, finalFileName)
+		filePath := filepath.Join(*uploadDir, finalFileName)
 
 		resizedImage := imaging.Resize(img, 1280, 0, imaging.Lanczos)
 
@@ -82,7 +83,7 @@ func main() {
 			"size_after": info.Size(),
 		})
 	})
-	app.Get("/*", static.New(uploadDir))
+	app.Get("/*", static.New(*uploadDir))
 	app.Delete("/*", func(c fiber.Ctx) error {
 		if c.Get("X-API-Key") != apiKey {
 			return fiber.NewError(fiber.StatusUnauthorized, "Unauthorized to delete file")
@@ -93,7 +94,7 @@ func main() {
 			return fiber.NewError(fiber.StatusBadRequest, "No file name found")
 		}
 
-		filePath := filepath.Join(uploadDir, fileName)
+		filePath := filepath.Join(*uploadDir, fileName)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fiber.NewError(fiber.StatusNotFound, "No file found")
 		}
@@ -105,6 +106,6 @@ func main() {
 		return c.SendString("File deleted successfully")
 	})
 
-	app.Listen(fmt.Sprintf(":%s", port))
-	log.Println("Server started on port", port)
+	app.Listen(fmt.Sprintf(":%d", *port))
+	log.Println("Server started on port", *port)
 }
