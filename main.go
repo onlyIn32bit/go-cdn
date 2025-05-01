@@ -15,11 +15,10 @@ import (
 )
 
 func main() {
-
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	const maxFileSize = 20 * 1024 * 1024
+	const maxFileSize = 20 * 1024 * 1024 // 20MB
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	apiKey := os.Getenv("API_KEY")
 	domain := os.Getenv("DOMAIN")
@@ -32,63 +31,71 @@ func main() {
 
 	app.Post("/upload", func(c fiber.Ctx) error {
 		if c.Get("X-API-Key") != apiKey {
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized to upload file")
+			return fiber.NewError(fiber.StatusUnauthorized, "Unauthorized to upload file")
 		}
 
-		file, err := c.FormFile("file")
+		formFile, err := c.FormFile("file")
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).SendString("No file found")
+			return fiber.NewError(fiber.StatusBadRequest, "No image found")
 		}
 
-		if file.Size > maxFileSize {
-			return c.Status(fiber.StatusBadRequest).SendString("File size limit exceeded")
+		if formFile.Size > maxFileSize {
+			return fiber.NewError(fiber.StatusBadRequest, "File size limit exceeded: 20MB")
 		}
 
-		fileSrc, err := file.Open()
+		file, err := formFile.Open()
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("No file found")
+			return fiber.NewError(fiber.StatusInternalServerError, "Cannot open image file")
 		}
-		defer fileSrc.Close()
+		defer file.Close()
 
-		img, _, err := image.Decode(fileSrc)
+		img, _, err := image.Decode(file)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnsupportedMediaType, "Invalid image format")
+			return fiber.NewError(fiber.StatusUnsupportedMediaType, "Invalid file format")
 		}
 
-		dstImg := imaging.Resize(img, 1280, 0, imaging.Lanczos)
+		// process image
+		fileName := c.FormValue("name")
+		if fileName == "" {
+			fileName = uuid.New().String()
+		}
+		finalFileName := fmt.Sprintf("%s%s", fileName, ".jpeg")
+		filePath := filepath.Join(uploadDir, finalFileName)
 
-		fileExt := filepath.Ext(file.Filename)
-		newFileName := fmt.Sprintf("%s%s", uuid.New().String(), fileExt)
-		filePath := filepath.Join(uploadDir, newFileName)
+		resizedImage := imaging.Resize(img, 1280, 0, imaging.Lanczos)
 
-		err = imaging.Save(dstImg, filePath, imaging.JPEGQuality(80))
-		if err != nil {
+		if err := imaging.Save(resizedImage, filePath, imaging.JPEGQuality(80)); err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to save image")
 		}
 
-		url := fmt.Sprintf("%s/%s", domain, newFileName)
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "Failed to get file info")
+		}
+
 		return c.JSON(fiber.Map{
-			"url": url,
+			"url":        fmt.Sprintf("%s/%s", domain, finalFileName),
+			"size_after": info.Size(),
 		})
 	})
 	app.Get("/*", static.New(uploadDir))
 	app.Delete("/*", func(c fiber.Ctx) error {
 		if c.Get("X-API-Key") != apiKey {
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized to delete file")
+			return fiber.NewError(fiber.StatusUnauthorized, "Unauthorized to delete file")
 		}
 
 		fileName := c.Params("*")
 		if fileName == "" {
-			return c.Status(fiber.StatusBadRequest).SendString("No file name found")
+			return fiber.NewError(fiber.StatusBadRequest, "No file name found")
 		}
 
 		filePath := filepath.Join(uploadDir, fileName)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return c.Status(fiber.StatusNotFound).SendString("No file found")
+			return fiber.NewError(fiber.StatusNotFound, "No file found")
 		}
 
 		if err := os.Remove(filePath); err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Cannot delete file")
+			return fiber.NewError(fiber.StatusInternalServerError, "Cannot delete file")
 		}
 
 		return c.SendString("File deleted successfully")
