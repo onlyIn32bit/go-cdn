@@ -22,10 +22,14 @@ func main() {
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	apiKey := os.Getenv("API_KEY")
 	domain := os.Getenv("DOMAIN")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8090"
+	}
 	fmt.Print(uploadDir)
 
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		log.Fatal(err)
+		log.Fatal("Cannot create uploads directory: ", err)
 	}
 	app := fiber.New()
 
@@ -101,5 +105,6 @@ func main() {
 		return c.SendString("File deleted successfully")
 	})
 
-	app.Listen(":8090")
+	app.Listen(fmt.Sprintf(":%s", port))
+	log.Println("Server started on port", port)
 }
