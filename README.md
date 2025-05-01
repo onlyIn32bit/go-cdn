@@ -33,12 +33,6 @@ This is a lightweight file upload and static file server built with Go and the F
 
     The server will run by default on port `8090` and serve content from `./uploads` folder.
 
-    **Output**
-
-    ```txt
-    Started server on port: 8090
-    ```
-
     You can specify the port and uploads folder by using flags
 
     - `--port`: `./go-cdn --port=3001`

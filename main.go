@@ -27,7 +27,8 @@ func main() {
 	const maxFileSize = 20 * 1024 * 1024 // 20MB
 	apiKey := os.Getenv("API_KEY")
 	domain := os.Getenv("DOMAIN")
-	fmt.Print(*uploadDir)
+	fmt.Println("Upload directory: ", *uploadDir)
+	fmt.Println("Server port: ", *port)
 
 	if err := os.MkdirAll(*uploadDir, os.ModePerm); err != nil {
 		log.Fatal("Cannot create uploads directory: ", err)
@@ -107,5 +108,4 @@ func main() {
 	})
 
 	app.Listen(fmt.Sprintf(":%d", *port))
-	log.Println("Server started on port", *port)
 }
